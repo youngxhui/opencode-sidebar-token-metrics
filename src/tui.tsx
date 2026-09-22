@@ -105,33 +105,38 @@ function TokenMetrics(props: { sessionID: string }) {
     ),
   )
 
+  const m = () => metrics()
+
   return (
     <Show
-      when={
-        metrics().tps !== undefined ||
-        metrics().cacheHit !== undefined ||
-        metrics().ttft !== undefined
-      }
+      when={m().tps !== undefined || m().cacheHit !== undefined || m().ttft !== undefined}
     >
       <box flexDirection="column">
         <text>
           <span>Speed </span>
           <span style={{ fg: context.theme.text.muted }}>
-            {metrics().tps !== undefined ? `${metrics().tps.toFixed(1)} tok/s` : "-"}
+            {(() => {
+              const v = m().tps
+              return v !== undefined ? `${v.toFixed(1)} tok/s` : "-"
+            })()}
           </span>
         </text>
         <text>
           <span>Cache </span>
           <span style={{ fg: context.theme.text.muted }}>
-            {metrics().cacheHit !== undefined
-              ? `${Math.round(metrics().cacheHit * 100)}%`
-              : "-"}
+            {(() => {
+              const v = m().cacheHit
+              return v !== undefined ? `${Math.round(v * 100)}%` : "-"
+            })()}
           </span>
         </text>
         <text>
           <span>TTFT </span>
           <span style={{ fg: context.theme.text.muted }}>
-            {metrics().ttft !== undefined ? formatDelay(metrics().ttft) : "-"}
+            {(() => {
+              const v = m().ttft
+              return v !== undefined ? formatDelay(v) : "-"
+            })()}
           </span>
         </text>
       </box>

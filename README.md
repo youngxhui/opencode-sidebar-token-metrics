@@ -37,15 +37,19 @@ Restart the OpenCode TUI to see the metrics block.
 
 `solid-js`, `@opentui/core`, and `@opentui/solid` are peer dependencies resolved by the OpenCode runtime — you do not install them yourself.
 
+The published entrypoint is **pre-built** (`dist/tui.js`, compiled with TypeScript using the `@opentui/solid` JSX runtime), so the OpenCode runtime never has to transpile TSX with an ambiguous JSX setting.
+
 ## Development
 
 ```sh
-# syntax/bundle check
-npm run check          # or: bun run check
+# build dist/tui.js (also runs automatically via prepack before npm pack/publish)
+bun run build
 
 # try it locally without publishing
-ln -s "$(pwd)/src/tui.tsx" ~/.config/opencode/plugins/token-metrics/tui.tsx
+ln -s "$(pwd)/dist/tui.js" ~/.config/opencode/plugins/token-metrics/tui.js
 ```
+
+`dist/` is a build artifact and is gitignored; `prepack` regenerates it on every pack/publish.
 
 Plugin id: `top.youngxhui.sidebar.tokenmetrics`
 

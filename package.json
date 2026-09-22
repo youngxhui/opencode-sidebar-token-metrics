@@ -1,15 +1,16 @@
 {
   "name": "opencode-sidebar-token-metrics",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "OpenCode sidebar plugin showing generation speed (tok/s), cache hit rate, and average time-to-first-token (TTFT).",
   "type": "module",
   "exports": {
     "./tui": {
       "types": "./src/tui.tsx",
-      "import": "./src/tui.tsx"
+      "import": "./dist/tui.js"
     }
   },
   "files": [
+    "dist",
     "src",
     "README.md",
     "LICENSE"
@@ -28,15 +29,21 @@
     "type": "git",
     "url": "git+https://github.com/youngxhui/opencode-sidebar-token-metrics.git"
   },
-  "dependencies": {
-    "@opencode/plugin": "^2.0.13"
-  },
   "peerDependencies": {
     "@opentui/core": ">=0.5.8",
     "@opentui/solid": ">=0.5.8",
     "solid-js": ">=1.9.0"
   },
   "scripts": {
-    "check": "bun build src/tui.tsx --external '*' --outfile /tmp/opencode-sidebar-token-metrics.check.js"
+    "build": "tsc -p tsconfig.json",
+    "check": "npm run build",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "^2.0.13",
+    "@opentui/core": "^0.5.12",
+    "@opentui/solid": "^0.5.12",
+    "solid-js": "^1.9.12",
+    "typescript": "^5.9.3"
   }
 }
