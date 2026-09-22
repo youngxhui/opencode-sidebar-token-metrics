@@ -7,10 +7,9 @@
     "jsxImportSource": "@opentui/solid",
     "strict": true,
     "skipLibCheck": true,
-    "declaration": false,
+    "noEmit": true,
     "types": [],
-    "rootDir": "src",
-    "outDir": "dist"
+    "rootDir": "src"
   },
   "include": ["src"]
 }

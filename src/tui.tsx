@@ -1,4 +1,4 @@
-import { createMemo, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 
 interface ContentItem {
@@ -97,21 +97,82 @@ function formatDelay(ms: number): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
+/**
+ * 会改变 `session.message.list()` 内容或本插件所读字段的事件。
+ *
+ * 宿主在这些事件中会自动同步消息缓存，此处的显式订阅是兜底：新窗口打开时
+ * 历史消息可能尚未拉取，先主动 `sync` 一次，之后每个事件再 `sync` 并 bump
+ * revision，确保 `createMemo` 重算、指标跟随会话数据实时刷新。
+ */
+const REFRESH_EVENTS = [
+  "session.created",
+  "session.deleted",
+  "session.forked",
+  "session.execution.started",
+  "session.execution.succeeded",
+  "session.execution.failed",
+  "session.execution.interrupted",
+  "session.step.started",
+  "session.step.ended",
+  "session.step.failed",
+  "session.text.started",
+  "session.text.ended",
+  "session.reasoning.started",
+  "session.reasoning.ended",
+  "session.usage.updated",
+  "session.compaction.ended",
+  "session.compaction.failed",
+  "session.revert.committed",
+  "session.inbox.delivered",
+] as const
+
 function TokenMetrics(props: { sessionID: string }) {
   const context = usePlugin()
-  const metrics = createMemo(() =>
-    computeMetrics(
-      context.data.session.message.list(props.sessionID) as readonly SessionLikeMessage[],
-    ),
-  )
+  const [revision, setRevision] = createSignal(0)
+
+  createEffect(() => {
+    const sessionID = props.sessionID
+    const sync = () => {
+      const bump = () => setRevision((value) => value + 1)
+      // 失败也 bump 一次，避免 Promise 永远不更新导致界面卡住
+      context.data.session.message.sync(sessionID).then(bump, bump)
+    }
+
+    // 新窗口打开时历史消息尚未进入缓存，先主动拉一次
+    try {
+      sync()
+    } catch {
+      /* 主动同步失败时仍可依赖宿主的事件自动刷新 */
+    }
+
+    try {
+      const offs = REFRESH_EVENTS.map((type) =>
+        context.data.on(type, (event) => {
+          // 事件负载的 sessionID 在 data 下，不在顶层
+          if (event.data.sessionID === sessionID) sync()
+        }),
+      )
+      onCleanup(() => {
+        for (const off of offs) off()
+      })
+    } catch {
+      /* 事件订阅不可用时仍可依赖宿主的事件自动刷新 */
+    }
+  })
+
+  const metrics = createMemo(() => {
+    revision()
+    try {
+      return computeMetrics(context.data.session.message.list(props.sessionID) as readonly SessionLikeMessage[])
+    } catch {
+      return {}
+    }
+  })
 
   const m = () => metrics()
 
   return (
-    <Show
-      when={m().tps !== undefined || m().cacheHit !== undefined || m().ttft !== undefined}
-    >
-      <box flexDirection="column">
+    <box flexDirection="column">
         <text>
           <span>Speed </span>
           <span style={{ fg: context.theme.text.muted }}>
@@ -139,8 +200,7 @@ function TokenMetrics(props: { sessionID: string }) {
             })()}
           </span>
         </text>
-      </box>
-    </Show>
+    </box>
   )
 }
 
