@@ -1,5 +1,28 @@
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
+import type { Context } from "@opencode/plugin/tui/context"
+
+/**
+ * 侧边栏所用的主题文本色：标签用 `base`、数值用 `muted`。
+ *
+ * 必须在渲染表达式里调用本函数，而不是在组件体内算好缓存：宿主的
+ * `context.theme` 是实时 getter（`themes.currentTokens()`），主题或明暗模式
+ * 运行时切换后返回的是新解析的令牌；放进 JSX 属性表达式后 babel-preset-solid
+ * 会把它包进 effect，读取时跟踪底层信号，颜色随主题自动刷新。
+ *
+ * 回退链针对 OpenCode 2.0.9 的令牌改名（opencode#49922）：`text.default` →
+ * `text.base`、`text.subdued` → `text.muted` 未保留别名，旧宿主上读新名会
+ * 得到 undefined，颜色会静默回落到终端默认色、不再跟随主题。
+ */
+function themeText(theme: Context["theme"]) {
+  const text = theme.text as typeof theme.text & {
+    default?: (typeof theme.text)["base"]
+    subdued?: (typeof theme.text)["muted"]
+  }
+  const base = text.base ?? text.default ?? text.muted ?? text.subdued
+  const muted = text.muted ?? text.subdued ?? base
+  return { base, muted }
+}
 
 interface ContentItem {
   type: string
@@ -171,11 +194,46 @@ function TokenMetrics(props: { sessionID: string }) {
 
   const m = () => metrics()
 
+  // 深浅色刷新兜底：宿主收到 THEME_MODE/PALETTE 事件后是异步重解析颜色令牌的，
+  // 事件到达瞬间 context.theme 可能还是旧值，所以立即 + 延迟各补刷两拍。
+  // CliRenderer 继承 Node EventEmitter，但本工程 types:[] 无 Node 类型，故结构化取用。
+  const [themeRevision, setThemeRevision] = createSignal(0)
+  createEffect(() => {
+    const renderer = context.renderer as unknown as {
+      on(event: string, listener: () => void): unknown
+      off(event: string, listener: () => void): unknown
+    }
+    let timers: ReturnType<typeof setTimeout>[] = []
+    const bump = () => setThemeRevision((value) => value + 1)
+    const refresh = () => {
+      bump()
+      timers.push(setTimeout(bump, 150), setTimeout(bump, 600))
+    }
+    renderer.on("theme_mode", refresh)
+    renderer.on("palette", refresh)
+    onCleanup(() => {
+      renderer.off("theme_mode", refresh)
+      renderer.off("palette", refresh)
+      for (const timer of timers) clearTimeout(timer)
+      timers = []
+    })
+  })
+
+  // 颜色集中在此计算：themeRevision 保证事件后强制重读，themeMode/theme 是宿主
+  // 实时 getter，切深浅色时若其内部是信号也会自动触发重算。
+  const colors = createMemo(() => {
+    themeRevision()
+    const mode = context.themeMode
+    return { mode, ...themeText(context.theme) }
+  })
+
+  // 主题色必须在 JSX 表达式里读取（见 themeText 注释），标签与数值各取一档，
+  // 标签不再吃终端默认前景色，深浅色/任意主题下都跟随当前主题。
   return (
     <box flexDirection="column">
         <text>
-          <span>Speed </span>
-          <span style={{ fg: context.theme.text.muted }}>
+          <span style={{ fg: colors().base }}>Speed </span>
+          <span style={{ fg: colors().muted }}>
             {(() => {
               const v = m().tps
               return v !== undefined ? `${v.toFixed(1)} tok/s` : "-"
@@ -183,8 +241,8 @@ function TokenMetrics(props: { sessionID: string }) {
           </span>
         </text>
         <text>
-          <span>Cache </span>
-          <span style={{ fg: context.theme.text.muted }}>
+          <span style={{ fg: colors().base }}>Cache </span>
+          <span style={{ fg: colors().muted }}>
             {(() => {
               const v = m().cacheHit
               return v !== undefined ? `${Math.round(v * 100)}%` : "-"
@@ -192,8 +250,8 @@ function TokenMetrics(props: { sessionID: string }) {
           </span>
         </text>
         <text>
-          <span>TTFT </span>
-          <span style={{ fg: context.theme.text.muted }}>
+          <span style={{ fg: colors().base }}>TTFT </span>
+          <span style={{ fg: colors().muted }}>
             {(() => {
               const v = m().ttft
               return v !== undefined ? formatDelay(v) : "-"

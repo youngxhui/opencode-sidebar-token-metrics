@@ -1,6 +1,6 @@
 {
   "name": "opencode-sidebar-token-metrics",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "OpenCode sidebar plugin showing generation speed (tok/s), cache hit rate, and average time-to-first-token (TTFT).",
   "type": "module",
   "exports": {
